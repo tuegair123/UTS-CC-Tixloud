@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  # PHP Service
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: tixcloud-app
+    container_name: tixcloud-app
+    restart: unless-stopped
+    tty: true
+    environment:
+      SERVICE_NAME: app
+      SERVICE_TAGS: dev
+    volumes:
+      - .:/var/www
+    networks:
+      - tixcloud-network
+
+  # Nginx Service
+  webserver:
+    image: nginx:alpine
+    container_name: tixcloud-webserver
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - .:/var/www
+      - ./docker-config/nginx:/etc/nginx/conf.d
+    networks:
+      - tixcloud-network
+
+  # Database Service
+  db:
+    image: mysql:8.0
+    container_name: tixcloud-db
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: tixcloud_db
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3306:3306"
+    networks:
+      - tixcloud-network
+
+  # LocalStack (AWS Simulation)
+  localstack:
+    image: localstack/localstack:3.0.0
+    container_name: tixcloud-aws
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=s3,sqs
+      - PERSISTENCE=1
+      - DEBUG=1
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    volumes:
+      - tixcloud_aws_data:/var/lib/localstack # GANTI: Pakai Named Volume
+      - "./init-aws:/etc/localstack/init/ready.d"
+    networks:
+      - tixcloud-network
+
+networks:
+  tixcloud-network:
+    driver: bridge
+
+# DEKLARASI VOLUME (Kunci Keamanan Data)
+volumes:
+  tixcloud_aws_data:
