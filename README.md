@@ -1,69 +1,52 @@
-# CodeIgniter 4 Application Starter
+PANDUAN INSTALASI DAN PENGGUNAAN PLATFORM TIXCLOUD
+TEGAR WIBISONO (32602400102)
+UTS CLOUD COMPUTING
+A.	Kebutuhan Perangkat Lunak (Prerequisites) Pastikan perangkat lunak berikut sudah terinstal dan berjalan di komputer:
+1.	Docker Desktop (Pastikan mesin Docker sudah dalam keadaan running).
+2.	Browser (Google Chrome / Firefox / Edge dll).
+3.	Terminal / PowerShell.
+B.	Langkah Membuka Aplikasi (Memulai Sesi Baru) Karena aplikasi ini mengusung konsep Ephemeral Cloud Mocking, setiap sesi akan dimulai dari keadaan bersih (fresh install).
+1.	Buka Terminal atau PowerShell, lalu arahkan ke dalam folder direktori project TixCloud.
+2.	Jalankan perintah berikut untuk membangun dan menyalakan semua kontainer (Nginx, PHP, MySQL, LocalStack) :
+docker compose up -d
+3.	Penting: Tunggu sekitar 15 - 20 detik. Waktu ini diperlukan agar mesin database MySQL selesai melakukan inisialisasi awal.
+4.	Setelah mesin siap, jalankan perintah migrasi ini untuk membangun struktur tabel database :
+docker exec -it tixcloud-app php spark migrate
+(Tunggu hingga muncul pesan sukses/Done! di terminal).
+5.	Selanjutnya, pastikan infrastruktur AWS tiruan (S3 dan SQS) sudah siap dengan menjalankan dua perintah ini secara berurutan :
+docker exec -it tixcloud-aws awslocal s3 mb s3://poster-konser
+docker exec -it tixcloud-aws awslocal sqs create-queue --queue-name antrian-tiket
+6.	Aplikasi siap digunakan! Buka browser dan akses URL: http://localhost:8080/konser
+C.	Skenario Pengujian (Testing)
+1.	Lakukan input data konser beserta unggah gambar poster.
+2.	Gambar poster akan dikirimkan ke AWS S3 (LocalStack), dan tautannya akan disimpan di MySQL.
+3.	Sebelum mencoba menekan tombol beli, jalankan perintah pada terminal/powershell untuk membuat antrean :
+docker exec -it tixcloud-aws awslocal sqs receive-message --queue-url http://localhost:4566/000000000000/antrian-tiket
+(Mungkin bisa di split screen menjadi 2, WEB dan Terminal/PowerShell)
+4.	Tekan tombol Beli Tiket (Via SQS) untuk menguji pengiriman pesan antrean (message queuing) ke layanan AWS SQS.
+5.	Buka kembali Terminal/Powershell dan jalankan perintah :
+docker exec -it tixcloud-aws awslocal sqs receive-message --queue-url http://localhost:4566/000000000000/antrian-tiket
+Maka akan muncul pesan JSON berisi data pesanan.
+D.	Langkah Menutup Aplikasi (Mengakhiri Sesi & Pembersihan) Setelah selesai melakukan pengujian, lingkungan Docker harus dibersihkan secara total agar tidak meninggalkan data "sampah" (cache memori) untuk pengujian di hari berikutnya.
+1.	Buka kembali Terminal/PowerShell yang berada di folder project.
+2.	Jalankan perintah berikut :
+docker compose down -v
+(Flag -v sangat krusial digunakan untuk memastikan seluruh memori/volume bawaan benar-benar dihancurkan). 
+3.	Sesi selesai dan aplikasi telah ditutup dengan aman.
 
-## What is CodeIgniter?
+KESIMPULAN :
+Proyek ini menggunakan LocalStack untuk menerapkan konsep arsitektur Ephemeral Environment. Simulasi difokuskan pada pengujian logika integrasi API Cloud (S3 dan SQS) menggunakan AWS SDK secara lokal, bukan untuk pengujian daya tahan data (Data Durability). Oleh karena itu, infrastruktur akan dikosongkan setiap sesi diakhiri, namun aplikasi sudah berstatus Cloud-Ready dan siap di-deploy ke environment AWS produksi tanpa perlu merombak source code.
+KETERBATASAN :
+•	Tidak Ada Data Durability (Persistensi Ephemeral): Ini adalah keterbatasan terbesar (dan alasan mengapa gambarmu sempat hilang). AWS S3 asli menjamin data tidak akan hilang karena direplikasi ke berbagai zona ketersediaan (Multi-AZ). Sementara LocalStack versi komunitas adalah layanan stateless/ephemeral; ia berjalan di atas RAM/memori sementara kontainer. Begitu mesin mati, infrastruktur awannya lenyap dan harus diinisialisasi ulang dari nol.
+•	Ketiadaan Validasi Keamanan (IAM Policies): AWS sangat ketat dengan Identity and Access Management (IAM). Di LocalStack, kamu bisa menggunakan key sembarangan (seperti test dan test) dan sistem akan tetap mengizinkan akses. Ini membuat pengujian skenario keamanan/otorisasi cloud tidak bisa dilakukan secara akurat di lokal.
+•	Keterbatasan Skalabilitas (Resource-Bound): Konsep utama cloud adalah auto-scaling (sumber daya tidak terbatas). Dalam simulasi ini, batas komputasi "awan" kamu dibatasi oleh spesifikasi CPU dan RAM laptopmu sendiri.
 
-CodeIgniter is a PHP full-stack web framework that is light, fast, flexible and secure.
-More information can be found at the [official site](https://codeigniter.com).
+TERSIMULASIKAN :
+•	Amazon S3 (Simple Storage Service) - Object Storage:
+o	Penerapan: Digunakan untuk menyimpan file tidak terstruktur (poster konser).
+o	Konsep Cloud: Memisahkan beban penyimpanan file statis dari server utama (Nginx/PHP). Di dunia nyata, ini mengurangi beban bandwidth server aplikasi karena user akan mengunduh gambar langsung dari S3.
+•	Amazon SQS (Simple Queue Service) - Message Queuing:
+o	Penerapan: Menampung antrean pesanan tiket yang dikirim oleh pengguna saat menekan tombol "Beli Tiket".
+o	Konsep Cloud: Menerapkan arsitektur Decoupling (pemisahan tugas) dan Asynchronous Processing. Aplikasi CodeIgniter tidak perlu memproses tiket secara real-time yang bisa membuat web lemot. Ia hanya melempar "pesan" ke SQS, lalu ada worker lain di latar belakang yang memproses antrean tersebut.
 
-This repository holds a composer-installable app starter.
-It has been built from the
-[development repository](https://github.com/codeigniter4/CodeIgniter4).
 
-More information about the plans for version 4 can be found in [CodeIgniter 4](https://forum.codeigniter.com/forumdisplay.php?fid=28) on the forums.
-
-You can read the [user guide](https://codeigniter.com/user_guide/)
-corresponding to the latest version of the framework.
-
-## Installation & updates
-
-`composer create-project codeigniter4/appstarter` then `composer update` whenever
-there is a new release of the framework.
-
-When updating, check the release notes to see if there are any changes you might need to apply
-to your `app` folder. The affected files can be copied or merged from
-`vendor/codeigniter4/framework/app`.
-
-## Setup
-
-Copy `env` to `.env` and tailor for your app, specifically the baseURL
-and any database settings.
-
-## Important Change with index.php
-
-`index.php` is no longer in the root of the project! It has been moved inside the *public* folder,
-for better security and separation of components.
-
-This means that you should configure your web server to "point" to your project's *public* folder, and
-not to the project root. A better practice would be to configure a virtual host to point there. A poor practice would be to point your web server to the project root and expect to enter *public/...*, as the rest of your logic and the
-framework are exposed.
-
-**Please** read the user guide for a better explanation of how CI4 works!
-
-## Repository Management
-
-We use GitHub issues, in our main repository, to track **BUGS** and to track approved **DEVELOPMENT** work packages.
-We use our [forum](http://forum.codeigniter.com) to provide SUPPORT and to discuss
-FEATURE REQUESTS.
-
-This repository is a "distribution" one, built by our release preparation script.
-Problems with it can be raised on our forum, or as issues in the main repository.
-
-## Server Requirements
-
-PHP version 8.2 or higher is required, with the following extensions installed:
-
-- [intl](http://php.net/manual/en/intl.requirements.php)
-- [mbstring](http://php.net/manual/en/mbstring.installation.php)
-
-> [!WARNING]
-> - The end of life date for PHP 7.4 was November 28, 2022.
-> - The end of life date for PHP 8.0 was November 26, 2023.
-> - The end of life date for PHP 8.1 was December 31, 2025.
-> - If you are still using below PHP 8.2, you should upgrade immediately.
-> - The end of life date for PHP 8.2 will be December 31, 2026.
-
-Additionally, make sure that the following extensions are enabled in your PHP:
-
-- json (enabled by default - don't turn it off)
-- [mysqlnd](http://php.net/manual/en/mysqlnd.install.php) if you plan to use MySQL
-- [libcurl](http://php.net/manual/en/curl.requirements.php) if you plan to use the HTTP\CURLRequest library
